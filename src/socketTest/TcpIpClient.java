@@ -56,7 +56,7 @@ class ClientSender extends Thread {
 		while(out!=null) {
 			try {
 				//0000352{"nw_event_info":[{"event_type":"WA", "ip_address":"192.168.101.101", "device_type":"NW", "device_name":"VM_TEST3_001", "location":"PowerState", "usage":"-1", "event_time":"2020-08-24 13:53:00", "event_code":"NWXEN0005", "event_msg":"NCC-Hcloud Agent 접속이 종료되었습니다",  "detail_msg":"NCC-Hcloud Agent 접속이 종료되었습니다"}]}
-				String temp = "0000346{\"event_info\":[{\"event_type\":\"CA\", \"ip_address\":\"192.168.1.5\", \"device_type\":\"NW\", \"device_name\":\"NCC-AaaS\", \"location\":\"PowerState\", \"usage_data\":\"-1\", \"event_time\":\"2020-08-03 16:04:44\", \"event_code\":\"NWXEN0005\", \"event_msg\":\"NCC-Monitor Agent >접속이 종료되었습니다\",  \"analysis_log_time\":\"2020-08-03 16:04:44\"}]}";	
+				String temp = "0000346{\"event_info\":[{\"event_type\":\"CA\", \"ip_address\":\"192.168.1.5\", \"device_type\":\"VM\", \"uuid\":\"07b852d6-1534-79f8-f940-e8b1546612b7\", \"device_name\":\"NCC-AaaS\", \"location\":\"PATTERN\", \"usage_data\":\"-1\", \"event_time\":\"2020-08-03 16:04:44\", \"event_code\":\"NWXEN0005\", \"event_msg\":\"NCC-Monitor Agent >접속이 종료되었습니다\",  \"analysis_log_time\":\"2020-08-03 16:04:44\"}]}";	
 				byte[] buffer = new byte[temp.getBytes().length];	
 				//byte[] buffer = new byte[354];
 				buffer = temp.getBytes("UTF-8");
