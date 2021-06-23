@@ -12,7 +12,7 @@ public class TcpIpClient {
 			//String serverIp = "192.168.101.110";
 			//String serverIp = "192.168.50.243";
 			//String serverIp = "10.10.0.116";
-			String serverIp = "127.0.0.1";
+			String serverIp = "192.168.101.113";
             // 소켓을 생성하여 연결을 요청한다.
 			Socket socket = new Socket(serverIp, 7777); 
 
