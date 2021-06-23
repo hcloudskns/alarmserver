@@ -11,6 +11,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,13 +26,14 @@ import javax.mail.Transport;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 
-public class AlarmServer {
+public class TcpIpServer {
 	public static void main(String args[]) {
 		ServerSocket serverSocket = null;
 		Socket socket = null;
@@ -50,7 +53,7 @@ public class AlarmServer {
 					clients.put(socket.getInetAddress().toString()+Integer.toString(socket.getPort()) , c);
 					System.out.println("IP: " + socket.getInetAddress().toString()+ " , " + Integer.toString(socket.getPort())) ;
 	
-					ServerReceiver receiver = new ServerReceiver(socket.getInetAddress().toString()+Integer.toString(socket.getPort()),clients );
+					ServerReceiver_ receiver = new ServerReceiver_(socket.getInetAddress().toString()+Integer.toString(socket.getPort()),clients );
 					//sender.start();
 					receiver.start();
 				}			
@@ -64,11 +67,11 @@ public class AlarmServer {
 } // class
 
 
-class ServerReceiver extends Thread {
+class ServerReceiver_ extends Thread {
 	Socket socket;
 	DataInputStream in;
 
-	ServerReceiver(String key,Map<String, Client> clients) {
+	ServerReceiver_(String key,Map<String, Client> clients) {
 		
 		Client c = clients.get(key);
 		this.socket = c.getSocket();
@@ -84,6 +87,15 @@ class ServerReceiver extends Thread {
 			/*프로시저로 처리*/	
 			Connection conn = null;
 			CallableStatement cstmt = null;
+			Statement stmt = null;
+			ResultSet rs = null;
+			PreparedStatement pstmt = null;
+			
+			String driver = "org.mariadb.jdbc.Driver";
+			
+			String url = "jdbc:mariadb://192.168.101.110:3306/HCLOUD";
+			String user = "root";
+			String pw = "P@$$W0rd";
 			
 				try {
 					
@@ -155,7 +167,9 @@ class ServerReceiver extends Thread {
 					
 					//메일 발송
 					FindType(device_type, location, event_type, uuid);
-															
+				
+					
+					
 				}
 				catch(SocketException e) {
 					
@@ -205,6 +219,7 @@ class ServerReceiver extends Thread {
 		}
 	} // run
 	
+	
 	public void SendMessage(java.net.Socket socket, String msg) throws IOException {
 		
 		DataOutputStream out = null;
@@ -227,148 +242,147 @@ class ServerReceiver extends Thread {
 			e.printStackTrace();
 		}	
 	}
-	
-	
+		
 	public void FindType (String device_type, String location, String event_type, String uuid) throws SQLException, ClassNotFoundException{
-		
-		String sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=? ;";
-		
-		String sql1 = "INSERT INTO TB_MAIL_SEND_LOG (USER_NAME, EMAIL_ADDR, MAIL_TITLE, MAIL_MESSAGE, SEND_DATE, SEND_YN) VALUES(?, ?, ?, ?, ?, ?)";
-		
-		String user = "hyunjo.hwang@namutech.co.kr"; // gmail 계정
-        String password = "Gksksla0702!";   // 패스워드
-        
-        String mailTitle = "문제 알람 보내드립니다.";
-        
-        
-        String Body = String.join(
-        		System.getProperty("line.separator"),
-        		"<table style=\"border:1px solid #f5f5f5;margin:auto;width:576px;border-collapse:collapse;background-color:white;color:rgba(0,0,0,0.66)\">",
-        		"<tbody><tr style=\"background-color:#e21837;height:56px;\">",
-        		"<td style=\"padding:0 36px\">",
-        		"<img src=\"/src/main/image/header_logo.png\" alt=\"NCC-HCloud\" style=\"height:20px;margin-right:10px;vertical-align:middle\" />",
-        		"<span style=\"font:21px;color:white;vertical-align:middle;\">통합 클라우드 플랫폼 서비스</span>",
-        		"</td>",
-        		"</tr>",
-        		"<tr style=\"height:250px;vertical-align:top\">",
-        		"<td style=\"padding:18px 36px;\">",
-        		"<p></p>",
-        		"<h2 style=\"font-size:21px;font-weight:normal;margin-bottom:25px;\">" + mailTitle + "</h2>",
-        		"<p></p>",
-        		"<p style=\"margin-top:14px\"></p>",
-        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">DEVICE TYPE</h3>",
-        		"<span style=\"font-size:18px;\">"+ device_type +"</span>",
-        		"<p></p>",
-        		"<p style=\"margin-top:14px\"></p>",
-        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">LOCATION</h3>",
-        		"<span style=\"font-size:18px;\">" + location + "</span>",
-        		"<p></p>",
-        		"<p style=\"margin-top:14px\"></p>",
-        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">장애등급</h3>",
-        		"<span style=\"font-size:18px;\">" + event_type + "</span>",
-        		"<p></p>",
-        		"<p style=\"margin-top:24px;margin-bottom:16px;\">",
-        		"<a href=\"#\" style=\"background-color:#e21837;text-decoration:none;color:white;font-size:13px;padding:0.5em 1em;\" target=\"_blank\">버튼명</a>",
-        		"</p>",
-        		"</td>",
-        		"</tr>",
-        		"<tr style=\"background-color:#fafafa;height:57px;\">",
-        		"<td style=\"padding:0 36px;font-size:12px;\">\r\n" + 
-        		"          COPYRIGHT (C) 2020 나무기술 CO., LTD. ALL RIGHT RESERVED.<br />\r\n" + 
-        		"		  서울특별시 강남구 삼성로 531 고운빌딩 T 02-3288-7900 | F 02-3288-8110<br />\r\n" + 
-        		"		  If you don't want this type of information or e-mail, please <a href=\"https://www.bizmailer.co.kr/bizsmart/action/openCheck.do?method=deny&amp;sn=27&amp;mk=14810069414996T7uhA2&amp;lk=1623658900746&amp;sk=27_1623658900746_16141306730300000098_D8BA4951916A8F00F281&amp;dk=D8BA4951916A8F00F281&amp;ck=16141306730300000098&amp;ce=hyeongsoo.kim@namutech.co.kr&amp;la=kr\" target=\"_blank\" data-saferedirecturl=\"https://www.google.com/url?q=https://www.bizmailer.co.kr/bizsmart/action/openCheck.do?method%3Ddeny%26sn%3D27%26mk%3D14810069414996T7uhA2%26lk%3D1623658900746%26sk%3D27_1623658900746_16141306730300000098_D8BA4951916A8F00F281%26dk%3DD8BA4951916A8F00F281%26ck%3D16141306730300000098%26ce%3Dhyeongsoo.kim@namutech.co.kr%26la%3Dkr&amp;source=gmail&amp;ust=1623888208881000&amp;usg=AFQjCNH1uBinB5F7zWR9kHSqUpw6w3Q-WA\" style=\"color:#e21837;\">[click here]</a>\r\n" + 
-        		"      </td>",
-        		"</tr>\r\n" + 
-        		"  </tbody>\r\n" + 
-        		"</table>\r\n" + 
-        		"</html>"
-        );
-		
-		try(Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
-			PreparedStatement stmt = dbCon.prepareStatement(sql);
-			){
-				stmt.setString(1, device_type);
-				stmt.setString(2, location);
-				stmt.setString(3, event_type);
-				
-				String bring = updateMailLog(device_type, uuid);
-				String[] email = bring.split("_");
-					
-				ResultSet rs = stmt.executeQuery();
-					
-				while(rs.next()) {
-					
-						java.util.Date utilDate = new java.util.Date();
-						java.sql.Timestamp sqlDate = new java.sql.Timestamp(utilDate.getTime());
-						
-						String send_yn = "";
-						
-						PreparedStatement stmt1 = dbCon.prepareStatement(sql1);
-						stmt1.setString(1, email[0]);
-						stmt1.setString(2, email[1]);
-						stmt1.setString(3, mailTitle);
-						stmt1.setString(4, Body);
-						stmt1.setTimestamp(5, sqlDate);
-						stmt1.setString(6, send_yn);
-						
-						stmt1.executeUpdate();
-
-					if(rs.getString("MAIL_SEND_YN").toUpperCase().equals("Y")) {
-						
-						// SMTP 서버 정보를 설정한다.
-				        Properties prop = new Properties();
-				        prop.put("mail.smtp.host", "smtp.gmail.com"); 
-				        prop.put("mail.smtp.port", 465); 
-				        prop.put("mail.smtp.auth", "true"); 
-				        prop.put("mail.smtp.ssl.enable", "true"); 
-				        prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
-				        
-				        Session session = Session.getDefaultInstance(prop, new javax.mail.Authenticator() {
-				            protected PasswordAuthentication getPasswordAuthentication() {
-				                return new PasswordAuthentication(user, password);
-				            }
-				        });
-				       
-				        try {
-				            MimeMessage message = new MimeMessage(session);
-				            message.setFrom(new InternetAddress(user));
-
-				            //수신자메일주소
-				            message.addRecipient(Message.RecipientType.TO, new InternetAddress(email[1])); 
-
-				            // Subject
-				            message.setSubject("이것은 테스트입니다"); //메일 제목을 입력
-				            
-				            // Email 발송
-				            message.setContent(Body, "text/html;charset=euc-kr");
-
-				            // send the message
-				            Transport.send(message); //전송
-				            System.out.println("message sent successfully...");
-				            
-				            
-				        } catch (AddressException e) {
-				         
-				            e.printStackTrace();
-				        } catch (MessagingException e) {
-				          
-				            e.printStackTrace();
-				        }
-					}
-			}
-				
-			rs.close();
-			stmt.close();
-			dbCon.close();
 			
+			String sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=? ;";
 			
+			String sql1 = "INSERT INTO TB_MAIL_SEND_LOG (USER_NAME, EMAIL_ADDR, MAIL_TITLE, MAIL_MESSAGE, SEND_DATE, SEND_YN) VALUES(?, ?, ?, ?, ?, ?)";
 			
-		}catch (SQLException ex){
-	        throw new RuntimeException(ex);
-		}	
-	}
+			String user = "hyunjo.hwang@namutech.co.kr"; // gmail 계정
+	        String password = "Gksksla0702!";   // 패스워드
+	        
+	        String mailTitle = "문제 알람 보내드립니다.";
+	        
+	        
+	        String Body = String.join(
+	        		System.getProperty("line.separator"),
+	        		"<table style=\"border:1px solid #f5f5f5;margin:auto;width:576px;border-collapse:collapse;background-color:white;color:rgba(0,0,0,0.66)\">",
+	        		"<tbody><tr style=\"background-color:#e21837;height:56px;\">",
+	        		"<td style=\"padding:0 36px\">",
+	        		"<img src=\"/src/main/image/header_logo.png\" alt=\"NCC-HCloud\" style=\"height:20px;margin-right:10px;vertical-align:middle\" />",
+	        		"<span style=\"font:21px;color:white;vertical-align:middle;\">통합 클라우드 플랫폼 서비스</span>",
+	        		"</td>",
+	        		"</tr>",
+	        		"<tr style=\"height:250px;vertical-align:top\">",
+	        		"<td style=\"padding:18px 36px;\">",
+	        		"<p></p>",
+	        		"<h2 style=\"font-size:21px;font-weight:normal;margin-bottom:25px;\">" + mailTitle + "</h2>",
+	        		"<p></p>",
+	        		"<p style=\"margin-top:14px\"></p>",
+	        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">DEVICE TYPE</h3>",
+	        		"<span style=\"font-size:18px;\">"+ device_type +"</span>",
+	        		"<p></p>",
+	        		"<p style=\"margin-top:14px\"></p>",
+	        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">LOCATION</h3>",
+	        		"<span style=\"font-size:18px;\">" + location + "</span>",
+	        		"<p></p>",
+	        		"<p style=\"margin-top:14px\"></p>",
+	        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">장애등급</h3>",
+	        		"<span style=\"font-size:18px;\">" + event_type + "</span>",
+	        		"<p></p>",
+	        		"<p style=\"margin-top:24px;margin-bottom:16px;\">",
+	        		"<a href=\"#\" style=\"background-color:#e21837;text-decoration:none;color:white;font-size:13px;padding:0.5em 1em;\" target=\"_blank\">버튼명</a>",
+	        		"</p>",
+	        		"</td>",
+	        		"</tr>",
+	        		"<tr style=\"background-color:#fafafa;height:57px;\">",
+	        		"<td style=\"padding:0 36px;font-size:12px;\">\r\n" + 
+	        		"          COPYRIGHT (C) 2020 나무기술 CO., LTD. ALL RIGHT RESERVED.<br />\r\n" + 
+	        		"		  서울특별시 강남구 삼성로 531 고운빌딩 T 02-3288-7900 | F 02-3288-8110<br />\r\n" + 
+	        		"		  If you don't want this type of information or e-mail, please <a href=\"https://www.bizmailer.co.kr/bizsmart/action/openCheck.do?method=deny&amp;sn=27&amp;mk=14810069414996T7uhA2&amp;lk=1623658900746&amp;sk=27_1623658900746_16141306730300000098_D8BA4951916A8F00F281&amp;dk=D8BA4951916A8F00F281&amp;ck=16141306730300000098&amp;ce=hyeongsoo.kim@namutech.co.kr&amp;la=kr\" target=\"_blank\" data-saferedirecturl=\"https://www.google.com/url?q=https://www.bizmailer.co.kr/bizsmart/action/openCheck.do?method%3Ddeny%26sn%3D27%26mk%3D14810069414996T7uhA2%26lk%3D1623658900746%26sk%3D27_1623658900746_16141306730300000098_D8BA4951916A8F00F281%26dk%3DD8BA4951916A8F00F281%26ck%3D16141306730300000098%26ce%3Dhyeongsoo.kim@namutech.co.kr%26la%3Dkr&amp;source=gmail&amp;ust=1623888208881000&amp;usg=AFQjCNH1uBinB5F7zWR9kHSqUpw6w3Q-WA\" style=\"color:#e21837;\">[click here]</a>\r\n" + 
+	        		"      </td>",
+	        		"</tr>\r\n" + 
+	        		"  </tbody>\r\n" + 
+	        		"</table>\r\n" + 
+	        		"</html>"
+	        );
+			
+			try(Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+				PreparedStatement stmt = dbCon.prepareStatement(sql);
+				){
+					stmt.setString(1, device_type);
+					stmt.setString(2, location);
+					stmt.setString(3, event_type);
+					
+					String bring = updateMailLog(device_type, uuid);
+					String[] email = bring.split("_");
+						
+					ResultSet rs = stmt.executeQuery();
+						
+					while(rs.next()) {
+						
+							java.util.Date utilDate = new java.util.Date();
+							java.sql.Timestamp sqlDate = new java.sql.Timestamp(utilDate.getTime());
+							
+							String send_yn = "";
+							
+							PreparedStatement stmt1 = dbCon.prepareStatement(sql1);
+							stmt1.setString(1, email[0]);
+							stmt1.setString(2, email[1]);
+							stmt1.setString(3, mailTitle);
+							stmt1.setString(4, Body);
+							stmt1.setTimestamp(5, sqlDate);
+							stmt1.setString(6, send_yn);
+							
+							stmt1.executeUpdate();
+
+						if(rs.getString("MAIL_SEND_YN").toUpperCase().equals("Y")) {
+							
+							// SMTP 서버 정보를 설정한다.
+					        Properties prop = new Properties();
+					        prop.put("mail.smtp.host", "smtp.gmail.com"); 
+					        prop.put("mail.smtp.port", 465); 
+					        prop.put("mail.smtp.auth", "true"); 
+					        prop.put("mail.smtp.ssl.enable", "true"); 
+					        prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+					        
+					        Session session = Session.getDefaultInstance(prop, new javax.mail.Authenticator() {
+					            protected PasswordAuthentication getPasswordAuthentication() {
+					                return new PasswordAuthentication(user, password);
+					            }
+					        });
+					       
+					        try {
+					            MimeMessage message = new MimeMessage(session);
+					            message.setFrom(new InternetAddress(user));
 	
-public String updateMailLog(String device_type, String uuid) throws SQLException, ClassNotFoundException {
+					            //수신자메일주소
+					            message.addRecipient(Message.RecipientType.TO, new InternetAddress(email[1])); 
+	
+					            // Subject
+					            message.setSubject("이것은 테스트입니다"); //메일 제목을 입력
+					            
+					            // Email 발송
+					            message.setContent(Body, "text/html;charset=euc-kr");
+	
+					            // send the message
+					            Transport.send(message); //전송
+					            System.out.println("message sent successfully...");
+					            
+					            
+					        } catch (AddressException e) {
+					         
+					            e.printStackTrace();
+					        } catch (MessagingException e) {
+					          
+					            e.printStackTrace();
+					        }
+						}
+				}
+					
+				rs.close();
+				stmt.close();
+				dbCon.close();
+				
+				
+				
+			}catch (SQLException ex){
+		        throw new RuntimeException(ex);
+			}	
+		}
+
+	public String updateMailLog(String device_type, String uuid) throws SQLException, ClassNotFoundException {
 		
 		String driver = "org.mariadb.jdbc.Driver";
 		String sql1 = "SELECT USER_NAME, EMAIL_ADDR FROM TB_CLUSTER WHERE  CLUSTER_UUID IN (SELECT A.CLUSTER_UUID FROM ( SELECT CLUSTER_UUID, VM_UUID AS UUID,  'VM' AS DEVICE_TYPE   FROM TB_VM UNION  SELECT CLUSTER_UUID, NODE_UUID AS UUID, 'NODE' AS DEVICE_TYPE    FROM TB_NODE    ) A WHERE A.UUID=?  AND A.DEVICE_TYPE=?) ";
@@ -405,8 +419,8 @@ public String updateMailLog(String device_type, String uuid) throws SQLException
         
 		return ret;
 	}
-
-
+	
+	    
 }
 
 
