@@ -12,7 +12,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,14 +25,15 @@ import javax.mail.Transport;
 import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
 
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 
 public class TcpIpServer {
+	@SuppressWarnings("unchecked")
 	public static void main(String args[]) {
 		ServerSocket serverSocket = null;
 		Socket socket = null;
@@ -87,89 +87,96 @@ class ServerReceiver_ extends Thread {
 			/*프로시저로 처리*/	
 			Connection conn = null;
 			CallableStatement cstmt = null;
-			Statement stmt = null;
-			ResultSet rs = null;
-			PreparedStatement pstmt = null;
-			
-			String driver = "org.mariadb.jdbc.Driver";
-			
-			String url = "jdbc:mariadb://192.168.101.110:3306/HCLOUD";
-			String user = "root";
-			String pw = "P@$$W0rd";
-			
+			String strData = "";
+			String strRealData = "";
 				try {
 					
 					byte[] buffer = new byte[8096];
-					int ret = in.read(buffer, 0, buffer.length);
-					System.out.println(ret);
-					String strData = new String((Arrays.copyOfRange(buffer, 0, ret)),"UTF-8");
-					int event_type_flag = 0;
-					
-					JSONParser jParser = new JSONParser();
-					JSONObject jObject;
-									
-					String strRealData = strData.substring(22,strData.length()-2);
-					//String strRealData = strData.substring(7);
+					Arrays.fill(buffer,(byte)0);
+					int ret = in.read(buffer, 0, buffer.length);					
+					strData = new String((Arrays.copyOfRange(buffer, 0, ret)),"UTF-8");
+					strRealData = strData.substring(7);
 					System.out.println("클라이언트로부터 받은 메시지: " + strRealData);
 					
-					jObject = (JSONObject)jParser.parse(strRealData);
+					int event_type_flag = 0;					
+					String ip_address = "";
+					String device_type = "";
+					String device_name = "";
+					String location = "";
+					String usage = "";
+					String event_time = "";
+					String event_code = "";					
+					String uuid = "";
+					String analysis_log_time = "";
+					String event_msg = "";
+					String event_type = "";
+										
+					JSONParser jParser = new JSONParser();
+					JSONObject jObjectRep;
 					
-					String event_type = (String)jObject.get("event_type");
-					
-					switch(event_type) {
-					
-						case "CA":
-							event_type_flag = 1;
-							break;
-							
-						case "WA":	
-							event_type_flag = 2;
-							break;
+					jObjectRep = (JSONObject)jParser.parse(strRealData);
+					JSONArray jsonArray ; 
+										
+					if(jObjectRep.containsKey("event_info")) {
 						
-						case "CR":	
-							event_type_flag = 3;
-							break;
-					}
-					
-					String ip_address = (String)jObject.get("ip_address");
-					String device_type = (String)jObject.get("device_type");
-					String device_name = (String)jObject.get("device_name");
-					String location = (String)jObject.get("location");
-					String usage_data = (String)jObject.get("usage_data");
-					String event_time = (String)jObject.get("event_time");
-					String event_code = (String)jObject.get("event_code");					
-					String uuid = (String)jObject.get("uuid");
-					String analysis_log_time = (String)jObject.get("analysis_log_time");
-					String event_msg = (String)jObject.get("event_msg");
-					
-										
-					Class.forName("org.mariadb.jdbc.Driver");	
-					conn = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
-					 
-					cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
+						jsonArray = (JSONArray)jObjectRep.get("event_info");
+						
+						for(int i=0; i< jsonArray.size(); i++) {
 							
-					cstmt.setString(1, event_type);
-					cstmt.setInt(2, event_type_flag);
-					cstmt.setString(3, ip_address);
-					cstmt.setString(4, device_type);
-					cstmt.setString(5, device_name);
-					cstmt.setString(6, location);
-					cstmt.setFloat(7, Float.parseFloat(usage_data));
-					cstmt.setTimestamp(8,java.sql.Timestamp.valueOf(event_time));
-					cstmt.setString(9, event_code);
-					cstmt.setString(10, uuid);
-					cstmt.setTimestamp(11, java.sql.Timestamp.valueOf(analysis_log_time));
-					cstmt.setString(12, event_msg);
-										
-					cstmt.executeUpdate();
-					
-					SendMessage(socket,"클랑언트에 보낼 메시지: OK");
-					
-					//메일 발송
-					FindType(device_type, location, event_type, uuid);
-				
-					
-					
+							JSONObject jObject = (JSONObject)jsonArray.get(i);
+							
+							ip_address = (String)jObject.get("ip_address");
+							device_type = (String)jObject.get("device_type");
+							device_name = (String)jObject.get("device_name");
+							location = (String)jObject.get("location");
+							usage = (String)jObject.get("usage");
+							event_time = (String)jObject.get("event_time");
+							event_code = (String)jObject.get("event_code");					
+							uuid = (String)jObject.get("uuid");
+							analysis_log_time = (String)jObject.get("analysis_log_time");
+							event_msg = (String)jObject.get("event_msg");
+							event_type = (String)jObject.get("event_type");
+							
+							switch(event_type) {
+							
+								case "CA":
+									event_type_flag = 1;
+									break;
+									
+								case "WA":	
+									event_type_flag = 2;
+									break;
+								
+								case "CR":	
+									event_type_flag = 3;
+									break;
+							}				
+							
+							Class.forName("org.mariadb.jdbc.Driver");	
+							conn = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+							 
+							cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
+									
+							cstmt.setString(1, event_type);
+							cstmt.setInt(2, event_type_flag);
+							cstmt.setString(3, ip_address);
+							cstmt.setString(4, device_type);
+							cstmt.setString(5, device_name);
+							cstmt.setString(6, location);
+							cstmt.setFloat(7, Float.parseFloat(usage));
+							cstmt.setTimestamp(8,java.sql.Timestamp.valueOf(event_time));
+							cstmt.setString(9, event_code);
+							cstmt.setString(10, uuid);
+							cstmt.setTimestamp(11, java.sql.Timestamp.valueOf(analysis_log_time));
+							cstmt.setString(12, event_msg);											
+							cstmt.executeUpdate();
+							
+							//SendMessage(socket,"클랑언트에 보낼 메시지: OK");							
+							//메일 발송
+							SendMail(device_type, location, event_type, uuid, event_msg);
+						}
+					}
+						
 				}
 				catch(SocketException e) {
 					
@@ -243,24 +250,18 @@ class ServerReceiver_ extends Thread {
 		}	
 	}
 		
-	public void FindType (String device_type, String location, String event_type, String uuid) throws SQLException, ClassNotFoundException{
+	public void SendMail (String device_type, String location, String event_type, String uuid, String event_msg) throws SQLException, ClassNotFoundException{
 			
-			String sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=? ;";
-			
-			String sql1 = "INSERT INTO TB_MAIL_SEND_LOG (USER_NAME, EMAIL_ADDR, MAIL_TITLE, MAIL_MESSAGE, SEND_DATE, SEND_YN) VALUES(?, ?, ?, ?, ?, ?)";
-			
+			String sql = "";  
 			String user = "hyunjo.hwang@namutech.co.kr"; // gmail 계정
-	        String password = "Gksksla0702!";   // 패스워드
-	        
-	        String mailTitle = "문제 알람 보내드립니다.";
-	        
-	        
+	        String password = "Gksksla0702!";   // 패스워드	        
+	        String mailTitle = "관리자용 장애 알람 메일";  
 	        String Body = String.join(
 	        		System.getProperty("line.separator"),
 	        		"<table style=\"border:1px solid #f5f5f5;margin:auto;width:576px;border-collapse:collapse;background-color:white;color:rgba(0,0,0,0.66)\">",
 	        		"<tbody><tr style=\"background-color:#e21837;height:56px;\">",
 	        		"<td style=\"padding:0 36px\">",
-	        		"<img src=\"/src/main/image/header_logo.png\" alt=\"NCC-HCloud\" style=\"height:20px;margin-right:10px;vertical-align:middle\" />",
+	        		"<img src=\"http://192.168.101.111:8070/style/images/common/header_logo.png\" alt=\"NCC-HCloud\" style=\"height:20px;margin-right:10px;vertical-align:middle\" />",
 	        		"<span style=\"font:21px;color:white;vertical-align:middle;\">통합 클라우드 플랫폼 서비스</span>",
 	        		"</td>",
 	        		"</tr>",
@@ -281,9 +282,13 @@ class ServerReceiver_ extends Thread {
 	        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">장애등급</h3>",
 	        		"<span style=\"font-size:18px;\">" + event_type + "</span>",
 	        		"<p></p>",
-	        		"<p style=\"margin-top:24px;margin-bottom:16px;\">",
+	        		"<p style=\"margin-top:14px\"></p>",
+	        		"<h3 style=\"font-size:13px;font-weight:normal;margin-bottom:4px;\">메시지</h3>",
+	        		"<span style=\"font-size:18px;\">" + event_msg + "</span>",
+	        		"<p></p>",
+	        		/*"<p style=\"margin-top:24px;margin-bottom:16px;\">",
 	        		"<a href=\"#\" style=\"background-color:#e21837;text-decoration:none;color:white;font-size:13px;padding:0.5em 1em;\" target=\"_blank\">버튼명</a>",
-	        		"</p>",
+	        		"</p>",*/
 	        		"</td>",
 	        		"</tr>",
 	        		"<tr style=\"background-color:#fafafa;height:57px;\">",
@@ -298,94 +303,93 @@ class ServerReceiver_ extends Thread {
 	        		"</html>"
 	        );
 			
-			try(Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
-				PreparedStatement stmt = dbCon.prepareStatement(sql);
-				){
+	        
+			try{
+					sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=?";	
+					Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+					PreparedStatement stmt = dbCon.prepareStatement(sql);
+									
 					stmt.setString(1, device_type);
 					stmt.setString(2, location);
 					stmt.setString(3, event_type);
 					
-					String bring = updateMailLog(device_type, uuid);
-					String[] email = bring.split("_");
+					String adminInfo = getAdminMailAccount(device_type, uuid);
+					String[] email = adminInfo.split("_");
 						
 					ResultSet rs = stmt.executeQuery();
 						
 					while(rs.next()) {
 						
+							if(rs.getString("MAIL_SEND_YN").toUpperCase().equals("Y")) {
+							
+								// SMTP 서버 정보를 설정한다.
+						        Properties prop = new Properties();
+						        prop.put("mail.smtp.host", "smtp.gmail.com"); 
+						        prop.put("mail.smtp.port", 465); 
+						        prop.put("mail.smtp.auth", "true"); 
+						        prop.put("mail.smtp.ssl.enable", "true"); 
+						        prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
+						        
+						        Session session = Session.getDefaultInstance(prop, new javax.mail.Authenticator() {
+						            protected PasswordAuthentication getPasswordAuthentication() {
+						                return new PasswordAuthentication(user, password);
+						            }
+						        });
+					       
+						        try {
+						            MimeMessage message = new MimeMessage(session);
+						            message.setFrom(new InternetAddress(user));
+		
+						            //수신자메일주소
+						            message.addRecipient(Message.RecipientType.TO, new InternetAddress(email[1])); 
+						            // Subject
+						            message.setSubject("관리자용 장애 알람 메일입니다."); //메일 제목을 입력
+						            // Email 발송
+						            message.setContent(Body, "text/html;charset=euc-kr");
+						            // send the message
+						            Transport.send(message); //전송
+						            System.out.println("message sent successfully...");
+						        } catch (AddressException e) {						         
+						            e.printStackTrace();
+						        } catch (MessagingException e) {						          
+						            e.printStackTrace();
+						        }
+							}
+							
 							java.util.Date utilDate = new java.util.Date();
 							java.sql.Timestamp sqlDate = new java.sql.Timestamp(utilDate.getTime());
 							
-							String send_yn = "";
+							if(rs.getString("MAIL_SEND_YN").toUpperCase().equals("Y"))
+								sqlDate = new java.sql.Timestamp(utilDate.getTime());
+							else
+								sqlDate = null;
 							
-							PreparedStatement stmt1 = dbCon.prepareStatement(sql1);
-							stmt1.setString(1, email[0]);
-							stmt1.setString(2, email[1]);
-							stmt1.setString(3, mailTitle);
-							stmt1.setString(4, Body);
-							stmt1.setTimestamp(5, sqlDate);
-							stmt1.setString(6, send_yn);
+							sql = "INSERT INTO TB_MAIL_SEND_LOG (USER_NAME, EMAIL_ADDR, MAIL_TITLE, MAIL_MESSAGE, REGISTER_DATE ,SEND_DATE, SEND_YN) VALUES(?, ?, ?, ?, NOW(), ?, ?)";
+							stmt = dbCon.prepareStatement(sql);
+							stmt.setString(1, email[0]);
+							stmt.setString(2, email[1]);
+							stmt.setString(3, mailTitle);
+							stmt.setString(4, Body);
+							stmt.setTimestamp(5, sqlDate);
+							stmt.setString(6, rs.getString("MAIL_SEND_YN").toUpperCase());							
+							stmt.executeUpdate();
 							
-							stmt1.executeUpdate();
-
-						if(rs.getString("MAIL_SEND_YN").toUpperCase().equals("Y")) {
 							
-							// SMTP 서버 정보를 설정한다.
-					        Properties prop = new Properties();
-					        prop.put("mail.smtp.host", "smtp.gmail.com"); 
-					        prop.put("mail.smtp.port", 465); 
-					        prop.put("mail.smtp.auth", "true"); 
-					        prop.put("mail.smtp.ssl.enable", "true"); 
-					        prop.put("mail.smtp.ssl.trust", "smtp.gmail.com");
-					        
-					        Session session = Session.getDefaultInstance(prop, new javax.mail.Authenticator() {
-					            protected PasswordAuthentication getPasswordAuthentication() {
-					                return new PasswordAuthentication(user, password);
-					            }
-					        });
-					       
-					        try {
-					            MimeMessage message = new MimeMessage(session);
-					            message.setFrom(new InternetAddress(user));
-	
-					            //수신자메일주소
-					            message.addRecipient(Message.RecipientType.TO, new InternetAddress(email[1])); 
-	
-					            // Subject
-					            message.setSubject("이것은 테스트입니다"); //메일 제목을 입력
-					            
-					            // Email 발송
-					            message.setContent(Body, "text/html;charset=euc-kr");
-	
-					            // send the message
-					            Transport.send(message); //전송
-					            System.out.println("message sent successfully...");
-					            
-					            
-					        } catch (AddressException e) {
-					         
-					            e.printStackTrace();
-					        } catch (MessagingException e) {
-					          
-					            e.printStackTrace();
-					        }
-						}
-				}
+					}
 					
-				rs.close();
-				stmt.close();
-				dbCon.close();
-				
-				
+					rs.close();
+					stmt.close();
+					dbCon.close();
 				
 			}catch (SQLException ex){
 		        throw new RuntimeException(ex);
 			}	
 		}
 
-	public String updateMailLog(String device_type, String uuid) throws SQLException, ClassNotFoundException {
+	public String getAdminMailAccount(String device_type, String uuid) throws SQLException, ClassNotFoundException {
 		
 		String driver = "org.mariadb.jdbc.Driver";
-		String sql1 = "SELECT USER_NAME, EMAIL_ADDR FROM TB_CLUSTER WHERE  CLUSTER_UUID IN (SELECT A.CLUSTER_UUID FROM ( SELECT CLUSTER_UUID, VM_UUID AS UUID,  'VM' AS DEVICE_TYPE   FROM TB_VM UNION  SELECT CLUSTER_UUID, NODE_UUID AS UUID, 'NODE' AS DEVICE_TYPE    FROM TB_NODE    ) A WHERE A.UUID=?  AND A.DEVICE_TYPE=?) ";
+		String sql = "SELECT USER_NAME, EMAIL_ADDR FROM TB_CLUSTER WHERE  CLUSTER_UUID IN (SELECT A.CLUSTER_UUID FROM ( SELECT CLUSTER_UUID, VM_UUID AS UUID,  'VM' AS DEVICE_TYPE   FROM TB_VM UNION  SELECT CLUSTER_UUID, NODE_UUID AS UUID, 'NODE' AS DEVICE_TYPE    FROM TB_NODE    ) A WHERE A.UUID=?  AND A.DEVICE_TYPE=?) ";
 		
         Connection con = null;
         PreparedStatement pstmt = null;
@@ -399,7 +403,7 @@ class ServerReceiver_ extends Thread {
 			Class.forName(driver);
         	con = DriverManager.getConnection(url, user, password);
         	
-        	pstmt = con.prepareStatement(sql1);
+        	pstmt = con.prepareStatement(sql);
         	pstmt.setString(1, uuid);
         	pstmt.setString(2, device_type);
         	
@@ -419,8 +423,6 @@ class ServerReceiver_ extends Thread {
         
 		return ret;
 	}
-	
-	    
 }
 
 
