@@ -11,7 +11,9 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -32,6 +34,7 @@ import org.json.simple.parser.ParseException;
 
 
 public class AlarmServer {
+	
 	public static void main(String args[]) {
 		ServerSocket serverSocket = null;
 		Socket socket = null;
@@ -39,8 +42,15 @@ public class AlarmServer {
 		Map<String, Client> clients = new HashMap<String, Client> ();
 		
 		try {
-				serverSocket = new ServerSocket(7777);
-				System.out.println("서버가 준비되었습니다.");
+				
+				if(DBConst.mode.equals("TEST")) {
+					serverSocket = new ServerSocket(DBConst.testAlarmServerPort);
+					System.out.println("테스트 Alarm 서버가 준비되었습니다.");
+				
+				}else {
+					serverSocket = new ServerSocket(DBConst.alarmServerPort);
+					System.out.println("Alarm 서버가 준비되었습니다.");
+				}
 				
 				while(true){
 					
@@ -77,6 +87,56 @@ class ServerReceiver extends Thread {
 		} catch(IOException e) {}
 
 	}
+	
+	public void insertLog(String deviceType, String uuid, String deviceName, String logMessage) {
+		Connection conn = null;
+		PreparedStatement pstmt = null;
+		String strSQL ="";
+		
+		SimpleDateFormat sdf1 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		Calendar cal1 = Calendar.getInstance();
+		String strDate = sdf1.format(cal1.getTime());
+		
+		int r =0;
+
+		try
+		{
+			Class.forName("org.mariadb.jdbc.Driver");
+			conn = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
+						
+			strSQL = "insert into TB_TR_LOG(DEVICE_TYPE, UUID, DEVICE_NAME,LOG_MESSAGE,LOG_DATE) values(?, ?, ?, ?, ?)";
+			pstmt = conn.prepareStatement(strSQL);
+			
+			pstmt.setString(1,deviceType );
+			pstmt.setString(2, uuid);
+			pstmt.setString(3, deviceName);
+			pstmt.setString(4, logMessage);
+			pstmt.setTimestamp(5,  java.sql.Timestamp.valueOf(strDate));
+			
+			r = pstmt.executeUpdate();
+			
+		} catch (SQLException | ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}finally {
+			if(conn != null)
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			if(pstmt != null)
+				try {
+					pstmt.close();
+				} catch (SQLException e) {
+				// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+		}
+	}
+
+
 
 	public synchronized void run() {
 		while(in!=null) {
@@ -84,8 +144,10 @@ class ServerReceiver extends Thread {
 			/*프로시저로 처리*/	
 			Connection conn = null;
 			CallableStatement cstmt = null;
+			PreparedStatement stmt = null;
 			String strData = "";
 			String strRealData = "";
+			String sql = "";
 			
 			try {
 				
@@ -94,7 +156,8 @@ class ServerReceiver extends Thread {
 				int ret = in.read(buffer, 0, buffer.length);					
 				strData = new String((Arrays.copyOfRange(buffer, 0, ret)),"UTF-8");
 				strRealData = strData.substring(7);
-				System.out.println("클라이언트로부터 받은 메시지: " + strRealData);
+				System.out.println("클라이언트로부터 받은 메시지: " + strData);
+				insertLog("", "", "","[Alarm서버 수신]:" +  strData );
 				
 				int event_type_flag = 0;					
 				String ip_address = "";
@@ -121,9 +184,10 @@ class ServerReceiver extends Thread {
 				jObjectRep = (JSONObject)jParser.parse(strRealData);
 				JSONArray jsonArray ; 
 									
-				if(jObjectRep.containsKey("event_info") || jObjectRep.containsKey("vm_event_info")) {
+				/*TTA3*/
+				if(jObjectRep.containsKey("vm_pattern_event_info")) {
 					
-					jsonArray = jObjectRep.containsKey("event_info") ? (JSONArray)jObjectRep.get("event_info"):(JSONArray)jObjectRep.get("vm_event_info");
+					jsonArray = (JSONArray)jObjectRep.get("vm_pattern_event_info");
 					
 					for(int i=0; i< jsonArray.size(); i++) {
 						
@@ -136,8 +200,10 @@ class ServerReceiver extends Thread {
 						usage = (String)jObject.get("usage");
 						event_time = (String)jObject.get("event_time");
 						event_code = (String)jObject.get("event_code");					
-						uuid = (String)jObject.get("uuid");
-						analysis_log_time = (String)jObject.get("analysis_log_time");
+												
+						uuid = jObject.containsKey("uuid")?(String)jObject.get("uuid"):"";
+						analysis_log_time =	jObject.containsKey("analysis_log_time")?(String)jObject.get("analysis_log_time"):"0001-01-01 00:00:00";
+						
 						event_msg = (String)jObject.get("event_msg");
 						event_type = (String)jObject.get("event_type");
 						
@@ -157,7 +223,7 @@ class ServerReceiver extends Thread {
 						}				
 						
 						Class.forName("org.mariadb.jdbc.Driver");	
-						conn = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+						conn = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
 						 
 						cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
 								
@@ -175,13 +241,190 @@ class ServerReceiver extends Thread {
 						cstmt.setString(12, event_msg);											
 						cstmt.executeUpdate();
 						
+						sql = " UPDATE TB_VM_CREATE_JOB_LOG " +
+							  " SET PATTERN_FIND_DATE=? "+
+							  " WHERE VM_UUID=? ";
+						
+						stmt = conn.prepareStatement(sql);
+						stmt.setTimestamp(1, java.sql.Timestamp.valueOf(analysis_log_time));
+						stmt.setString(2, uuid);
+						stmt.executeUpdate();
+						
+						insertLog(device_type, uuid, device_name,"[Alarm서버  vm_pattern_event_info 프로시저 매개 변수] :" +  event_type + " / " + event_type_flag + " / " + 
+								ip_address + " / " +	 device_type + " / " + device_name + " / " + location  + " / " + usage + " / " +
+								event_time + " / " + event_code + " / " + uuid  + " / " +analysis_log_time + " / " +event_msg
+						);
+						
 						//SendMessage(socket,"클랑언트에 보낼 메시지: OK");							
 						//메일 발송
 						SendMail(device_type, location, event_type, uuid, event_msg);
 					}
-				}else if(jObjectRep.containsKey("vm_cpu_report")){
+				}else if(jObjectRep.containsKey("vm_cpu_event_info")) {/*TTA4*/
 					
-					jsonArray = (JSONArray)jObjectRep.get("vm_cpu_report");
+					jsonArray = (JSONArray)jObjectRep.get("vm_cpu_event_info");
+					
+					for(int i=0; i< jsonArray.size(); i++) {
+						
+						JSONObject jObject = (JSONObject)jsonArray.get(i);
+						
+						ip_address = (String)jObject.get("ip_address");
+						device_type = (String)jObject.get("device_type");
+						device_name = (String)jObject.get("device_name");
+						location = (String)jObject.get("location");
+						usage = (String)jObject.get("usage");
+						event_time = (String)jObject.get("event_time");
+						event_code = (String)jObject.get("event_code");					
+												
+						uuid = jObject.containsKey("uuid")?(String)jObject.get("uuid"):"";
+						analysis_log_time =	jObject.containsKey("analysis_log_time")?(String)jObject.get("analysis_log_time"):"0001-01-01 00:00:00";
+						
+						event_msg = (String)jObject.get("event_msg");
+						event_type = (String)jObject.get("event_type");
+						
+						switch(event_type) {
+						
+							case "CA":
+								event_type_flag = 1;
+								break;
+								
+							case "WA":	
+								event_type_flag = 2;
+								break;
+							
+							case "CR":	
+								event_type_flag = 3;
+								break;
+						}				
+						
+						Class.forName("org.mariadb.jdbc.Driver");	
+						conn = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
+						 
+						cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
+								
+						cstmt.setString(1, event_type);
+						cstmt.setInt(2, event_type_flag);
+						cstmt.setString(3, ip_address);
+						cstmt.setString(4, device_type);
+						cstmt.setString(5, device_name);
+						cstmt.setString(6, location);
+						cstmt.setFloat(7, Float.parseFloat(usage));
+						cstmt.setTimestamp(8,java.sql.Timestamp.valueOf(event_time));
+						cstmt.setString(9, event_code);
+						cstmt.setString(10, uuid);
+						cstmt.setTimestamp(11, java.sql.Timestamp.valueOf(analysis_log_time));
+						cstmt.setString(12, event_msg);											
+						cstmt.executeUpdate();
+						
+						sql = " UPDATE TB_VM_CREATE_JOB_LOG " +
+							  " SET CPU_LIMIT_HAPPEN_DATE=?, "+
+							  "     CPU_LIMIT_SERVER_SAVE_DATE=? "+
+							  " WHERE VM_UUID=? ";
+						
+						stmt = conn.prepareStatement(sql);
+						stmt.setTimestamp(1,java.sql.Timestamp.valueOf(event_time));
+						stmt.setTimestamp(2, java.sql.Timestamp.valueOf(analysis_log_time));
+						stmt.setString(3, uuid);
+						stmt.executeUpdate();
+						
+						insertLog(device_type, uuid, device_name,"[Alarm서버  vm_cpu_event_info 프로시저 매개 변수] :" +  event_type + " / " + event_type_flag + " / " + 
+								ip_address + " / " +	 device_type + " / " + device_name + " / " + location  + " / " + usage + " / " +
+								event_time + " / " + event_code + " / " + uuid  + " / " +analysis_log_time + " / " +event_msg
+						);
+
+						
+						//SendMessage(socket,"클랑언트에 보낼 메시지: OK");							
+						//메일 발송
+						SendMail(device_type, location, event_type, uuid, event_msg);
+					}
+				}else if(jObjectRep.containsKey("vm_power_event_info")) {/*TTA7*/
+					
+					jsonArray = (JSONArray)jObjectRep.get("vm_power_event_info");
+					
+					for(int i=0; i< jsonArray.size(); i++) {
+						
+						JSONObject jObject = (JSONObject)jsonArray.get(i);
+						
+						ip_address = (String)jObject.get("ip_address");
+						device_type = (String)jObject.get("device_type");
+						device_name = (String)jObject.get("device_name");
+						location = (String)jObject.get("location");
+						usage = (String)jObject.get("usage");
+						event_time = (String)jObject.get("event_time");
+						event_code = (String)jObject.get("event_code");
+						
+						uuid = jObject.containsKey("uuid")?(String)jObject.get("uuid"):"";
+						analysis_log_time =	jObject.containsKey("analysis_log_time")?(String)jObject.get("analysis_log_time"):"0001-01-01 00:00:00";
+						                                                                                                       
+						event_msg = (String)jObject.get("event_msg");
+						event_type = (String)jObject.get("event_type");
+						
+						switch(event_type) {
+						
+							case "CA":
+								event_type_flag = 1;
+								break;
+								
+							case "WA":	
+								event_type_flag = 2;
+								break;
+							
+							case "CR":	
+								event_type_flag = 3;
+								break;
+						}				
+						
+						Class.forName("org.mariadb.jdbc.Driver");	
+						conn = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
+						 
+						cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
+								
+						cstmt.setString(1, event_type);
+						cstmt.setInt(2, event_type_flag);
+						cstmt.setString(3, ip_address);
+						cstmt.setString(4, device_type);
+						cstmt.setString(5, device_name);
+						cstmt.setString(6, location);
+						cstmt.setFloat(7, Float.parseFloat(usage));
+						cstmt.setTimestamp(8,java.sql.Timestamp.valueOf(event_time));
+						cstmt.setString(9, event_code);
+						cstmt.setString(10, uuid);
+						cstmt.setTimestamp(11, java.sql.Timestamp.valueOf(analysis_log_time));
+						cstmt.setString(12, event_msg);											
+						cstmt.executeUpdate();
+						
+						sql = " UPDATE TB_VM_CREATE_JOB_LOG " +
+							  " SET VM_EXIT_SERVER_SAVE_DATE=? "+							  
+							  " WHERE VM_NAME=? AND IP_ADDRESS=? ";
+						
+						stmt = conn.prepareStatement(sql);
+						stmt.setTimestamp(1,  java.sql.Timestamp.valueOf(analysis_log_time));						
+						stmt.setString(2, device_name);
+						stmt.setString(3, ip_address);
+						stmt.executeUpdate();
+						
+						
+						sql = " UPDATE TB_VM " +
+							  " SET POWER_STATE='HALTED' "+							  
+							  " WHERE VM_NAME=? AND IP_ADDRESS=? ";
+							
+						stmt = conn.prepareStatement(sql);
+						stmt.setString(1, device_name);
+						stmt.setString(2, ip_address);
+						stmt.executeUpdate();						
+							
+						
+						insertLog(device_type, uuid, device_name,"[Alarm서버  vm_power_event_info 프로시저 매개 변수] :" +  event_type + " / " + event_type_flag + " / " + 
+								ip_address + " / " +	 device_type + " / " + device_name + " / " + location  + " / " + usage + " / " +
+								event_time + " / " + event_code + " / " + uuid  + " / " +analysis_log_time + " / " +event_msg
+						);
+						
+						//SendMessage(socket,"클랑언트에 보낼 메시지: OK");							
+						//메일 발송
+						SendMail(device_type, location, event_type, uuid, event_msg);
+					}
+				}else if(jObjectRep.containsKey("vm_cpu_report") ||jObjectRep.containsKey("vm_memory_report")){
+					
+					jsonArray = jObjectRep.containsKey("vm_cpu_report") == true ? (JSONArray)jObjectRep.get("vm_cpu_report") : (JSONArray)jObjectRep.get("vm_memory_report") ;
 					
 					for(int i=0; i< jsonArray.size(); i++) {
 						
@@ -200,13 +443,13 @@ class ServerReceiver extends Thread {
 						event_level = (String)jObject.get("event_time");
 												
 						Class.forName("org.mariadb.jdbc.Driver");	
-						conn = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+						conn = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
 						 
-						cstmt = conn.prepareCall("{call SP_VM_CPU_EVENT_INFO_I(?,?,?,?,?,?,?,?,?,?,?)}"); 
+						cstmt = conn.prepareCall("{call SP_RESOURCE_USE_INFO_I(?,?,?,?,?,?,?,?,?,?,?)}"); 
 								
 						cstmt.setString(1, pid);
 						cstmt.setString(2, process);
-						cstmt.setFloat(3, cpu_usage);
+						cstmt.setFloat(3, cpu_usage);						
 						cstmt.setFloat(4, mem_usage);
 						cstmt.setString(5, event_type);
 						cstmt.setString(6, ip_address);
@@ -215,7 +458,7 @@ class ServerReceiver extends Thread {
 						cstmt.setString(9, device_name);
 						cstmt.setString(10, location);
 						cstmt.setString(11, event_level);											
-						cstmt.executeUpdate();						
+						cstmt.executeUpdate();		
 					}
 				}
 			}
@@ -293,9 +536,13 @@ class ServerReceiver extends Thread {
 		
 	public void SendMail (String device_type, String location, String event_type, String uuid, String event_msg) throws SQLException, ClassNotFoundException{
 			
+			System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");
+			System.setProperty("jsse.enableSNIExtension", "false");
+
+
 			String sql = "";  
-			String user = "hyunjo.hwang@namutech.co.kr"; // gmail 계정
-	        String password = "Gksksla0702!";   // 패스워드	        
+			String user = DBConst.mailAddr; // gmail 계정
+	        String password = DBConst.mailPwd;   // 패스워드	        
 	        String mailTitle = "관리자용 장애 알람 메일";  
 	        String Body = String.join(
 	        		System.getProperty("line.separator"),
@@ -347,7 +594,7 @@ class ServerReceiver extends Thread {
 	        
 			try{
 					sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=?";	
-					Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+					Connection dbCon = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
 					PreparedStatement stmt = dbCon.prepareStatement(sql);
 									
 					stmt.setString(1, device_type);
@@ -429,20 +676,16 @@ class ServerReceiver extends Thread {
 
 	public String getAdminMailAccount(String device_type, String uuid) throws SQLException, ClassNotFoundException {
 		
-		String driver = "org.mariadb.jdbc.Driver";
 		String sql = "SELECT USER_NAME, EMAIL_ADDR FROM TB_CLUSTER WHERE  CLUSTER_UUID IN (SELECT A.CLUSTER_UUID FROM ( SELECT CLUSTER_UUID, VM_UUID AS UUID,  'VM' AS DEVICE_TYPE   FROM TB_VM UNION  SELECT CLUSTER_UUID, NODE_UUID AS UUID, 'NODE' AS DEVICE_TYPE    FROM TB_NODE    ) A WHERE A.UUID=?  AND A.DEVICE_TYPE=?) ";
 		
         Connection con = null;
         PreparedStatement pstmt = null;
         
-        String user = "root"; // gmail 계정
-        String password = "P@$$w0rd";   // 패스워드
-        String url = "jdbc:mariadb://192.168.101.110:3306/HCLOUD";
         String ret = ""; // problem here
 		try {
 			
-			Class.forName(driver);
-        	con = DriverManager.getConnection(url, user, password);
+			Class.forName("org.mariadb.jdbc.Driver");
+        	con = DriverManager.getConnection(DBConst.DBConnectionStr,DBConst.userName, DBConst.userPwd);
         	
         	pstmt = con.prepareStatement(sql);
         	pstmt.setString(1, uuid);

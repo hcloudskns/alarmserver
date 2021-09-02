@@ -153,7 +153,7 @@ class ServerReceiver_ extends Thread {
 							}				
 							
 							Class.forName("org.mariadb.jdbc.Driver");	
-							conn = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+							conn = DriverManager.getConnection("jdbc:mariadb://192.168.102.110:3306/HCLOUD","root", "P@$$w0rd");
 							 
 							cstmt = conn.prepareCall("{call SP_ALARM_MESSAGE_I(?,?,?,?,?,?,?,?,?,?,?,?)}"); 
 									
@@ -306,7 +306,7 @@ class ServerReceiver_ extends Thread {
 	        
 			try{
 					sql = "SELECT MAIL_SEND_YN, DEVICE_TYPE, LOCATION, EVENT_TYPE FROM TB_MAIL_POLICY WHERE DEVICE_TYPE=? AND LOCATION=? AND EVENT_TYPE=?";	
-					Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.101.110:3306/HCLOUD","root", "P@$$w0rd");
+					Connection dbCon = DriverManager.getConnection("jdbc:mariadb://192.168.102.110:3306/HCLOUD","root", "P@$$w0rd");
 					PreparedStatement stmt = dbCon.prepareStatement(sql);
 									
 					stmt.setString(1, device_type);
@@ -396,7 +396,7 @@ class ServerReceiver_ extends Thread {
         
         String user = "root"; // gmail 계정
         String password = "P@$$w0rd";   // 패스워드
-        String url = "jdbc:mariadb://192.168.101.110:3306/HCLOUD";
+        String url = "jdbc:mariadb://192.168.102.110:3306/HCLOUD";
         String ret = ""; // problem here
 		try {
 			
