@@ -8,7 +8,7 @@ public final class DBConst {
 	public static final String alarmServer="192.168.102.113";
 	public static final String testAlarmServer ="localhost";
 	public static final String mailAddr = "namutechtest80@gmail.com";
-	public static final String mailPwd = "Na  cd mutest1";
+	public static final String mailPwd = "Namutest1";
 	public static final String mode ="REAL";
 	//public static final String mode ="TEST";
 	
