@@ -217,14 +217,16 @@ class ServerReceiver extends Thread {
 										device_name = (String)jObject.get("device_name");
 										location = (String)jObject.get("location");
 										usage = (String)jObject.get("usage");
-										event_time = (String)jObject.get("event_time");
-										event_code = (String)jObject.get("event_code");					
+										event_time = (String)jObject.get("event_time");															
+										event_code = (String)jObject.get("event_code");
 																
 										uuid = jObject.containsKey("uuid")?(String)jObject.get("uuid"):"";
 										analysis_log_time =	jObject.containsKey("analysis_log_time")?(String)jObject.get("analysis_log_time"):"0001-01-01 00:00:00.000000";
 										
 										event_msg = (String)jObject.get("event_msg");
-										event_type = (String)jObject.get("event_type");
+										/*전문에는 PA로 오는데 CA로 바꾼다. */
+										//event_type = (String)jObject.get("event_type");
+										event_type = "CA";
 										
 										switch(event_type) {
 										
